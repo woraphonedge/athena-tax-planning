@@ -129,7 +129,7 @@ const Portfolio: React.FC<PortfolioProps> = ({ positions, setPositions }) => {
                             <Input id="expectedReturn" name="expectedReturn" type="number" value={newPosition.expectedReturn} onChange={handleInputChange} placeholder="e.g., 8" />
                         </div>
                     </div>
-                    <Button onClick={handleAddPosition} className="w-full mt-4">Add Position</Button>
+                    <Button onClick={handleAddPosition} className="w-full mt-4 bg-black text-white hover:bg-gray-800" disabled={!newPosition.symbol.trim()}>Add Position</Button>
                 </div>
             </CardContent>
         </Card>

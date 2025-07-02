@@ -53,18 +53,7 @@ interface ProjectionOutput {
 }
 
 
-// --- CORE CALCULATION LOGIC --- //
-
-/**
- * Calculates investment projections based on user inputs.
- * This function is pure and has no side effects.
- *
- * @param {ProjectionInput} params - The input parameters for the calculation.
- * @returns {ProjectionOutput} An object containing both the detailed yearly data and summary metrics.
- */
-
 // --- PORTFOLIO METRICS CALCULATION --- //
-
 /**
  * Calculates portfolio-level metrics from a list of positions.
  * In a real application, this might involve an API call for sophisticated calculations.
@@ -85,7 +74,14 @@ const calculatePortfolioMetrics = (positions: Position[]) => {
     return { investment, expectedReturn, volatility };
 };
 
-
+// --- CORE CALCULATION LOGIC --- //
+/**
+ * Calculates investment projections based on user inputs.
+ * This function is pure and has no side effects.
+ *
+ * @param {ProjectionInput} params - The input parameters for the calculation.
+ * @returns {ProjectionOutput} An object containing both the detailed yearly data and summary metrics.
+ */
 const calculateInvestmentProjection = (params: ProjectionInput): ProjectionOutput => {
     const {
         investment,
@@ -216,11 +212,16 @@ const SummaryMetrics: React.FC<{ summary: ProjectionSummary; currencyFormatter: 
 };
 
 
+const initialPositions: Position[] = [
+    { symbol: 'KKP GB', assetClass: 'Fixed Income', expectedReturn: 4, investmentAmount: 100000 },
+    { symbol: 'KKP GNP-H-SSF', assetClass: 'Global Equity', expectedReturn: 8, investmentAmount: 100000 },
+];
+
 // --- REACT COMPONENT --- //
 
 const App: React.FC = () => {
     // --- STATE MANAGEMENT --- //
-    const [positions, setPositions] = useState<Position[]>([]);
+    const [positions, setPositions] = useState<Position[]>(initialPositions);
     const [age, setAge] = useState(35);
     const [projectionYears, setProjectionYears] = useState(25);
     const [percentile, setPercentile] = useState(10); // e.g., 10 for 10th/90th percentile

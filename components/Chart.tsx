@@ -3,7 +3,9 @@ import React, { useState, useMemo } from 'react';
 import ParametersPanel from './ParametersPanel';
 import ProjectionChart from './ProjectionChart';
 import ProjectionTable from './ProjectionTable';
+import Portfolio, { Position } from './Portfolio';
 import jStat from 'jstat';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 // --- TYPE DEFINITIONS --- //
 
@@ -75,7 +77,7 @@ const calculateInvestmentProjection = (params: ProjectionInput): ProjectionOutpu
 
     // This helper function implements the closed-form lognormal approximation.
     const getLognormalDistributionParams = (C: number, N: number, mu: number, sigma: number) => {
-        if (N === 0 || C === 0) return { E: C, mu_w: Math.log(C || 1), sigma_w: 0 };
+        if (N === 0 || C === 0) return { logMu: Math.log(C || 1), logSigma: 0 };
 
         const m = 1 + mu;
         const A = m ** 2 + sigma ** 2;
@@ -117,7 +119,7 @@ const calculateInvestmentProjection = (params: ProjectionInput): ProjectionOutpu
             const prevYearProjection = results[year - 2].projection;
             projectionValue = prevYearProjection * (1 + expectedReturn) + investment;
         }
-        
+
         cumulativeInvestment += investment;
 
         const { logMu, logSigma } = getLognormalDistributionParams(investment, year, expectedReturn, volatility);
@@ -171,17 +173,21 @@ const SummaryMetrics: React.FC<{ summary: ProjectionSummary; currencyFormatter: 
     ];
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
-            <h2 className="text-xl font-semibold text-slate-800 mb-4">Projection Summary</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+        <Card>
+            <CardHeader>
+                <CardTitle>Projection Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 sm:grid-cols-3 gap-6">
                 {metrics.map(({ label, value }) => (
-                    <div key={label} className="bg-slate-50 p-4 rounded-lg text-center shadow-sm">
-                        <p className="text-sm text-slate-500 font-medium truncate">{label}</p>
-                        <p className="text-xl font-semibold text-slate-900 mt-1">{value}</p>
-                    </div>
+                    <Card key={label} className="text-center">
+                        <CardHeader>
+                            <CardDescription>{label}</CardDescription>
+                            <CardTitle className="text-2xl">{value}</CardTitle>
+                        </CardHeader>
+                    </Card>
                 ))}
-            </div>
-        </div>
+            </CardContent>
+        </Card>
     );
 };
 
@@ -190,12 +196,24 @@ const SummaryMetrics: React.FC<{ summary: ProjectionSummary; currencyFormatter: 
 
 const App: React.FC = () => {
     // --- STATE MANAGEMENT --- //
-    const [investment, setInvestment] = useState(300000);
+    const [positions, setPositions] = useState<Position[]>([]);
     const [age, setAge] = useState(35);
     const [projectionYears, setProjectionYears] = useState(25);
-    const [expectedReturn, setExpectedReturn] = useState(6); // in percent
-    const [volatility, setVolatility] = useState(10); // in percent
     const [percentile, setPercentile] = useState(10); // e.g., 10 for 10th/90th percentile
+
+    // --- DERIVED PORTFOLIO METRICS --- //
+    const investment = useMemo(() => {
+        return positions.reduce((acc, pos) => acc + pos.investmentAmount, 0);
+    }, [positions]);
+
+    const expectedReturn = useMemo(() => {
+        const totalInvestment = positions.reduce((acc, pos) => acc + pos.investmentAmount, 0);
+        if (totalInvestment === 0) return 0;
+        const weightedReturn = positions.reduce((acc, pos) => acc + pos.investmentAmount * (pos.expectedReturn / 100), 0);
+        return (weightedReturn / totalInvestment);
+    }, [positions]);
+
+    const volatility = 0.15; // 15% as per requirement
 
     // --- MEMOIZED CALCULATION --- //
     // useMemo ensures the heavy calculation only runs when inputs change.
@@ -204,9 +222,9 @@ const App: React.FC = () => {
             investment,
             age,
             projectionYears,
-            expectedReturn: expectedReturn / 100,
-            volatility: volatility / 100,
-            percentile: percentile,
+            expectedReturn,
+            volatility,
+            percentile,
         });
     }, [investment, age, projectionYears, expectedReturn, volatility, percentile]);
 
@@ -220,43 +238,67 @@ const App: React.FC = () => {
 
 
     return (
-        <div className="max-w-7xl mx-auto">
+        <div className="container mx-auto p-4 md:p-8">
+            {/* Header */}
+            <header className="pb-8 mb-8 border-b">
+                <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Investment Projection Calculator</h1>
+                <p className="mt-4 text-xl text-muted-foreground">Visualize your mutual fund growth and returns over time.</p>
+            </header>
 
-                {/* Header */}
-                <header className="pb-8 mb-8 border-b border-gray-200">
-                    <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">Investment Projection Calculator</h1>
-                    <p className="mt-4 text-xl text-gray-500">Visualize your mutual fund growth and returns over time.</p>
-                </header>
+            {/* Main Content Area */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Portfolio */}
+                <div className="lg:col-span-1">
+                    <Portfolio positions={positions} setPositions={setPositions} />
+                </div>
+
+                {/* Parameters */}
+                <div className="lg:col-span-1">
                     <ParametersPanel
-                        investment={investment}
-                        setInvestment={setInvestment}
                         age={age}
                         setAge={setAge}
                         projectionYears={projectionYears}
                         setProjectionYears={setProjectionYears}
-                        expectedReturn={expectedReturn}
-                        setExpectedReturn={setExpectedReturn}
-                        volatility={volatility}
-                        setVolatility={setVolatility}
                         percentile={percentile}
                         setPercentile={setPercentile}
                     />
-                    <div className="lg:col-span-2 space-y-8">
+                </div>
+
+                {/* Projection Chart */}
+                {yearlyData.length > 0 && (
+                    <Card className="lg:col-span-1">
+                        <CardHeader>
+                            <CardTitle>Portfolio Projection</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <ProjectionChart
+                                projectionData={yearlyData}
+                                currencyFormatter={currencyFormatter}
+                                compactNumberFormatter={compactNumberFormatter}
+                            />
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Projection Summary */}
+                {yearlyData.length > 0 && (
+                    <div className="lg:col-span-1">
                         <SummaryMetrics summary={summary} currencyFormatter={currencyFormatter} />
-                        <ProjectionChart
-                            projectionData={yearlyData}
-                            currencyFormatter={currencyFormatter}
-                            compactNumberFormatter={compactNumberFormatter}
-                        />
+                    </div>
+                )}
+
+                {/* Projection Table */}
+                {yearlyData.length > 0 && (
+                    <div className="lg:col-span-2">
                         <ProjectionTable
                             projectionData={yearlyData}
                             currencyFormatter={currencyFormatter}
                         />
                     </div>
-                </div>
+                )}
             </div>
+        </div>
     );
 };
 

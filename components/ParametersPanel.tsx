@@ -22,8 +22,6 @@ interface ParametersPanelProps {
     setExpectedReturn: (v: number) => void;
     volatility: number;
     setVolatility: (v: number) => void;
-    taxBracket: number;
-    setTaxBracket: (v: number) => void;
     percentile: number;
     setPercentile: (v: number) => void;
 }
@@ -57,7 +55,6 @@ const ParametersPanel: React.FC<ParametersPanelProps> = (props) => {
                 <Parameter label="Projection Years" value={props.projectionYears} setValue={props.setProjectionYears} min={5} max={50} step={1} />
                 <Parameter label="Expected Annual Return (%)" value={props.expectedReturn} setValue={props.setExpectedReturn} min={1} max={20} step={0.5} />
                 <Parameter label="Annual Volatility (%)" value={props.volatility} setValue={props.setVolatility} min={1} max={30} step={0.5} />
-                <Parameter label="Average Tax Bracket (%)" value={props.taxBracket} setValue={props.setTaxBracket} min={0} max={35} step={1} />
                 <Parameter label="Best/Worst Case Percentile (%)" value={props.percentile} setValue={props.setPercentile} min={1} max={25} step={1} />
             </div>
         </div>

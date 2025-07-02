@@ -16,7 +16,6 @@ interface ProjectionInput {
     projectionYears: number;  // Number of years to project into the future
     expectedReturn: number;   // Annual expected return (e.g., 0.06 for 6%)
     volatility: number;       // Annual volatility (e.g., 0.10 for 10%)
-    taxBracket: number;       // User's tax bracket for calculating tax savings (e.g., 0.20 for 20%)
     percentile: number;       // Percentile for best/worst case (e.g., 10 for 10th/90th)
 }
 
@@ -28,15 +27,10 @@ interface YearlyData {
     age: number;
     investment: number;         // Investment for this specific year
     totalInvestment: number;    // Accumulated investment up to this year
-    coreProjection: number;     // The median projected portfolio value
-    coreWorstCase: number;      // The worst case projection for this year
-    coreBestCase: number;       // The best case projection for this year
-    projection: number;         // The median projected portfolio value including tax savings
-    worstCase: number;          // The worst case projection for this year including tax savings
-    bestCase: number;           // The best case projection for this year including tax savings
-    taxSaved: number;           // Tax saved for this specific year
-    cumulativeTaxSaved: number; // Accumulated tax savings
-    investmentReturn: number;   // Total return, including capital gains and tax savings
+    projection: number;         // The median projected portfolio value
+    worstCase: number;          // The worst case projection for this year
+    bestCase: number;           // The best case projection for this year
+    investmentReturn: number;   // Total return, including capital gains
 }
 
 /**
@@ -44,7 +38,6 @@ interface YearlyData {
  */
 interface ProjectionSummary {
     committedAnnualInvestment: number;
-    taxSavedAnnually: number;
     baseCAGR: number;
     lastYearInvestmentValue: number;
 }
@@ -74,13 +67,11 @@ const calculateInvestmentProjection = (params: ProjectionInput): ProjectionOutpu
         projectionYears,
         expectedReturn,
         volatility,
-        taxBracket,
         percentile,
     } = params;
 
     const results: YearlyData[] = [];
     let cumulativeInvestment = 0;
-    let cumulativeTaxSavedTotal = 0;
 
     // This helper function implements the closed-form lognormal approximation.
     const getLognormalDistributionParams = (C: number, N: number, mu: number, sigma: number) => {
@@ -113,52 +104,37 @@ const calculateInvestmentProjection = (params: ProjectionInput): ProjectionOutpu
     };
 
     for (let year = 1; year <= projectionYears; year++) {
-        let projectionValue, projectionValueWithTaxSaved, worstValue, topValue, topValueWithTaxSaved, worstValueWithTaxSaved, taxSavedThisYear, totalReturn;
+        let projectionValue, worstValue, topValue, totalReturn;
 
         if (year === 1) {
-            // Year 1: Initial investment, no returns yet, but tax savings apply
+            // Year 1: Initial investment, no returns yet
             projectionValue = investment;
-            projectionValueWithTaxSaved = investment;
             worstValue = investment;
             topValue = investment;
-            worstValueWithTaxSaved = investment;
-            topValueWithTaxSaved = investment;
-            taxSavedThisYear = investment * taxBracket;
-            totalReturn = taxSavedThisYear; // Only tax savings contribute to return in year 1
+            totalReturn = 0;
         } else {
             // Subsequent years: Apply returns to previous year's projection
-            const prevYearCoreProjection = results[year - 2].coreProjection;
-            taxSavedThisYear = investment * taxBracket;
-            projectionValue = prevYearCoreProjection * (1 + expectedReturn) + investment;
-
+            const prevYearProjection = results[year - 2].projection;
+            projectionValue = prevYearProjection * (1 + expectedReturn) + investment;
         }
         
         cumulativeInvestment += investment;
-        cumulativeTaxSavedTotal += taxSavedThisYear;
 
-        const { logMu, logSigma } = getLognormalDistributionParams(investment, year , expectedReturn, volatility);
+        const { logMu, logSigma } = getLognormalDistributionParams(investment, year, expectedReturn, volatility);
         const topZ = jStat.normal.inv((100 - percentile) / 100, 0, 1)
         const worstZ = jStat.normal.inv(percentile / 100, 0, 1)
-        topValue = Math.exp(logMu + topZ * logSigma) ;
-        projectionValueWithTaxSaved = projectionValue + cumulativeTaxSavedTotal;
-        topValueWithTaxSaved = topValue + cumulativeTaxSavedTotal;
-        worstValue = Math.exp(logMu + worstZ * logSigma) ;
-        worstValueWithTaxSaved = worstValue + cumulativeTaxSavedTotal;
-        totalReturn = projectionValue - cumulativeInvestment  + cumulativeTaxSavedTotal;
+        topValue = Math.exp(logMu + topZ * logSigma);
+        worstValue = Math.exp(logMu + worstZ * logSigma);
+        totalReturn = projectionValue - cumulativeInvestment;
 
         results.push({
             year: year,
             age: age + year,
             investment: investment,
             totalInvestment: cumulativeInvestment,
-            coreProjection: projectionValue,
-            coreWorstCase: worstValue,
-            coreBestCase: topValue,
-            projection: projectionValueWithTaxSaved,
-            worstCase: worstValueWithTaxSaved < 0 ? 0 : worstValueWithTaxSaved,
-            bestCase: topValueWithTaxSaved,
-            taxSaved: taxSavedThisYear,
-            cumulativeTaxSaved: cumulativeTaxSavedTotal,
+            projection: projectionValue,
+            worstCase: worstValue < 0 ? 0 : worstValue,
+            bestCase: topValue,
             investmentReturn: totalReturn
         });
     }
@@ -167,7 +143,6 @@ const calculateInvestmentProjection = (params: ProjectionInput): ProjectionOutpu
     if (results.length === 0) {
         const emptySummary: ProjectionSummary = {
             committedAnnualInvestment: params.investment,
-            taxSavedAnnually: params.investment * params.taxBracket,
             baseCAGR: 0,
             lastYearInvestmentValue: 0,
         };
@@ -175,12 +150,9 @@ const calculateInvestmentProjection = (params: ProjectionInput): ProjectionOutpu
     }
 
     const lastYear = results[results.length - 1];
-    const totalInvested = lastYear.totalInvestment;
-    const years = params.projectionYears;
 
     const summary: ProjectionSummary = {
         committedAnnualInvestment: params.investment,
-        taxSavedAnnually: params.investment * params.taxBracket,
         baseCAGR: params.expectedReturn,
         lastYearInvestmentValue: lastYear.projection,
     };
@@ -194,7 +166,6 @@ const SummaryMetrics: React.FC<{ summary: ProjectionSummary; currencyFormatter: 
 
     const metrics = [
         { label: "Annual Investment", value: currencyFormatter(summary.committedAnnualInvestment) },
-        { label: "Annual Tax Saved", value: currencyFormatter(summary.taxSavedAnnually) },
         { label: "Median CAGR", value: formatPercent(summary.baseCAGR) },
         { label: "Final Value (Median)", value: currencyFormatter(summary.lastYearInvestmentValue) },
     ];
@@ -224,7 +195,6 @@ const App: React.FC = () => {
     const [projectionYears, setProjectionYears] = useState(25);
     const [expectedReturn, setExpectedReturn] = useState(6); // in percent
     const [volatility, setVolatility] = useState(10); // in percent
-    const [taxBracket, setTaxBracket] = useState(20); // in percent
     const [percentile, setPercentile] = useState(10); // e.g., 10 for 10th/90th percentile
 
     // --- MEMOIZED CALCULATION --- //
@@ -236,10 +206,9 @@ const App: React.FC = () => {
             projectionYears,
             expectedReturn: expectedReturn / 100,
             volatility: volatility / 100,
-            taxBracket: taxBracket / 100,
             percentile: percentile,
         });
-    }, [investment, age, projectionYears, expectedReturn, volatility, taxBracket, percentile]);
+    }, [investment, age, projectionYears, expectedReturn, volatility, percentile]);
 
     // --- UI RENDERING --- //
     const currencyFormatter = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'THB', minimumFractionDigits: 0 }).format(value);
@@ -256,7 +225,7 @@ const App: React.FC = () => {
                 {/* Header */}
                 <header className="pb-8 mb-8 border-b border-gray-200">
                     <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">Investment Projection Calculator</h1>
-                    <p className="mt-4 text-xl text-gray-500">Visualize your mutual fund growth, returns, and tax savings over time.</p>
+                    <p className="mt-4 text-xl text-gray-500">Visualize your mutual fund growth and returns over time.</p>
                 </header>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -271,8 +240,6 @@ const App: React.FC = () => {
                         setExpectedReturn={setExpectedReturn}
                         volatility={volatility}
                         setVolatility={setVolatility}
-                        taxBracket={taxBracket}
-                        setTaxBracket={setTaxBracket}
                         percentile={percentile}
                         setPercentile={setPercentile}
                     />

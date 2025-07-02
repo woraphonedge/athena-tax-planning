@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
  
 @layer base {
   :root {
@@ -48,12 +47,16 @@
     --ring: 240 4.9% 83.9%;
   }
 }
- 
-@layer base {
-  * {
-    @apply border-border;
+
+@layer components {
+  .card-compact .card-header {
+    @apply pb-2;
   }
-  body {
-    @apply bg-background text-foreground;
+  .card-compact .card-content {
+    @apply p-4 pt-0;
+  }
+  .card-compact .card-title {
+    @apply text-lg;
   }
 }
+

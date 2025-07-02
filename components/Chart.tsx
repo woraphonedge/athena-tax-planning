@@ -62,6 +62,30 @@ interface ProjectionOutput {
  * @param {ProjectionInput} params - The input parameters for the calculation.
  * @returns {ProjectionOutput} An object containing both the detailed yearly data and summary metrics.
  */
+
+// --- PORTFOLIO METRICS CALCULATION --- //
+
+/**
+ * Calculates portfolio-level metrics from a list of positions.
+ * In a real application, this might involve an API call for sophisticated calculations.
+ * @param {Position[]} positions - An array of investment positions.
+ * @returns {{investment: number, expectedReturn: number, volatility: number}} - The calculated metrics.
+ */
+const calculatePortfolioMetrics = (positions: Position[]) => {
+    const investment = positions.reduce((acc, pos) => acc + pos.investmentAmount, 0);
+
+    const weightedReturn = positions.reduce((acc, pos) => acc + pos.investmentAmount * (pos.expectedReturn / 100), 0);
+
+    const expectedReturn = investment === 0 ? 0 : weightedReturn / investment;
+
+    // As per current requirements, volatility is a fixed value.
+    // In a real scenario, this would be a sophisticated calculation based on the portfolio composition.
+    const volatility = 0.15; // 15%
+
+    return { investment, expectedReturn, volatility };
+};
+
+
 const calculateInvestmentProjection = (params: ProjectionInput): ProjectionOutput => {
     const {
         investment,
@@ -131,7 +155,7 @@ const calculateInvestmentProjection = (params: ProjectionInput): ProjectionOutpu
 
         results.push({
             year: year,
-            age: age + year,
+            age: age + year - 1,
             investment: investment,
             totalInvestment: cumulativeInvestment,
             projection: projectionValue,
@@ -177,7 +201,7 @@ const SummaryMetrics: React.FC<{ summary: ProjectionSummary; currencyFormatter: 
             <CardHeader>
                 <CardTitle>Projection Summary</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+            <CardContent className="grid grid-cols-1 sm:grid-cols-1 gap-6">
                 {metrics.map(({ label, value }) => (
                     <Card key={label} className="text-center">
                         <CardHeader>
@@ -202,18 +226,7 @@ const App: React.FC = () => {
     const [percentile, setPercentile] = useState(10); // e.g., 10 for 10th/90th percentile
 
     // --- DERIVED PORTFOLIO METRICS --- //
-    const investment = useMemo(() => {
-        return positions.reduce((acc, pos) => acc + pos.investmentAmount, 0);
-    }, [positions]);
-
-    const expectedReturn = useMemo(() => {
-        const totalInvestment = positions.reduce((acc, pos) => acc + pos.investmentAmount, 0);
-        if (totalInvestment === 0) return 0;
-        const weightedReturn = positions.reduce((acc, pos) => acc + pos.investmentAmount * (pos.expectedReturn / 100), 0);
-        return (weightedReturn / totalInvestment);
-    }, [positions]);
-
-    const volatility = 0.15; // 15% as per requirement
+    const { investment, expectedReturn, volatility } = useMemo(() => calculatePortfolioMetrics(positions), [positions]);
 
     // --- MEMOIZED CALCULATION --- //
     // useMemo ensures the heavy calculation only runs when inputs change.
@@ -238,18 +251,18 @@ const App: React.FC = () => {
 
 
     return (
-        <div className="container mx-auto p-4 md:p-8">
+        <div className="container mx-auto p-4">
             {/* Header */}
-            <header className="pb-8 mb-8 border-b">
-                <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Investment Projection Calculator</h1>
-                <p className="mt-4 text-xl text-muted-foreground">Visualize your mutual fund growth and returns over time.</p>
+            <header className="pb-4 mb-4 border-b">
+                <h1 className="text-3xl font-bold tracking-tight">Investment Projection Calculator</h1>
+                <p className="mt-2 text-lg text-muted-foreground">Visualize your mutual fund growth and returns over time.</p>
             </header>
 
             {/* Main Content Area */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-2">
 
                 {/* Portfolio */}
-                <div className="lg:col-span-1">
+                <div className="lg:col-span-2">
                     <Portfolio positions={positions} setPositions={setPositions} />
                 </div>
 
@@ -262,12 +275,16 @@ const App: React.FC = () => {
                         setProjectionYears={setProjectionYears}
                         percentile={percentile}
                         setPercentile={setPercentile}
+                        investment={investment}
+                        expectedReturn={expectedReturn}
+                        volatility={volatility}
                     />
                 </div>
-
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-2">
                 {/* Projection Chart */}
                 {yearlyData.length > 0 && (
-                    <Card className="lg:col-span-1">
+                    <Card className="lg:col-span-2 card-compact">
                         <CardHeader>
                             <CardTitle>Portfolio Projection</CardTitle>
                         </CardHeader>
@@ -283,14 +300,15 @@ const App: React.FC = () => {
 
                 {/* Projection Summary */}
                 {yearlyData.length > 0 && (
-                    <div className="lg:col-span-1">
+                    <div className="lg:col-span-1 card-compact">
                         <SummaryMetrics summary={summary} currencyFormatter={currencyFormatter} />
                     </div>
                 )}
-
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-2">
                 {/* Projection Table */}
                 {yearlyData.length > 0 && (
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-3 card-compact">
                         <ProjectionTable
                             projectionData={yearlyData}
                             currencyFormatter={currencyFormatter}

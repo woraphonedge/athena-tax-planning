@@ -19,6 +19,7 @@ interface ProjectionInput {
     expectedReturn: number;   // Annual expected return (e.g., 0.06 for 6%)
     volatility: number;       // Annual volatility (e.g., 0.10 for 10%)
     percentile: number;       // Percentile for best/worst case (e.g., 10 for 10th/90th)
+    lumpSumInvestment: number; // One-time lump sum invested at the start (year 1)
 }
 
 /**
@@ -27,12 +28,16 @@ interface ProjectionInput {
 interface YearlyData {
     year: number;
     age: number;
-    investment: number;         // Investment for this specific year
-    totalInvestment: number;    // Accumulated investment up to this year
+    investment: number;         // Annual investment for this specific year
+    lumpSum: number;            // Lump sum applied in this year (only non-zero in year 1)
+    totalAnnualInvestment: number; // Accumulated annual investments up to this year
+    totalLumpSumInvestment: number; // Accumulated lump sum up to this year (constant after year 1)
+    totalInvestment: number;    // Accumulated total (annual + lump sum) up to this year (kept for backward compatibility)
     projection: number;         // The median projected portfolio value
     worstCase: number;          // The worst case projection for this year
     bestCase: number;           // The best case projection for this year
     investmentReturn: number;   // Total return, including capital gains
+    medianCase?: number;        // Optional: median under shared-Z evaluation
 }
 
 /**
@@ -90,10 +95,12 @@ const calculateInvestmentProjection = (params: ProjectionInput): ProjectionOutpu
         expectedReturn,
         volatility,
         percentile,
+        lumpSumInvestment,
     } = params;
 
     const results: YearlyData[] = [];
-    let cumulativeInvestment = 0;
+    let cumulativeAnnualInvestment = 0;
+    let cumulativeLumpSumInvestment = 0;
 
     // This helper function implements the closed-form lognormal approximation.
     const getLognormalDistributionParams = (C: number, N: number, mu: number, sigma: number) => {
@@ -125,39 +132,99 @@ const calculateInvestmentProjection = (params: ProjectionInput): ProjectionOutpu
         return { logMu, logSigma };
     };
 
+    // --- SHARED-Z FAN QUANTILES HELPERS --- //
+    const zOf = (p: number) => jStat.normal.inv(p, 0, 1);
+    function totalQuantilesForYear(
+        annLogMu: number, annLogSigma: number,
+        lumpLogMu: number, lumpLogSigma: number,
+        percentiles: number[]
+    ): Record<number, number> {
+        const out: Record<number, number> = {};
+        for (const p of percentiles) {
+            const z = zOf(p); // assume coeff = 1 -> shared Z (comonotonic)
+            const annQ = Math.exp(annLogMu + z * annLogSigma);
+            const lumpQ = Math.exp(lumpLogMu + z * lumpLogSigma);
+            out[p] = annQ + lumpQ;
+        }
+        return out;
+    }
+
+    // Lump sum future value approximation as lognormal using first and second moments.
+    // Future Value after N years with per-year mean mu and std sigma:
+    // E[S_N] = L * (1+mu)^N,  E[S_N^2] = L^2 * ( (1+mu)^2 + sigma^2 )^N
+    // Then approximate lognormal parameters from mean/variance.
+    const getLumpSumDistributionParams = (L: number, N: number, mu: number, sigma: number) => {
+        if (L === 0) return { logMu: Math.log(1), logSigma: 0 };
+        if (N <= 0) return { logMu: Math.log(L), logSigma: 0 };
+        const m = 1 + mu;
+        const A = m ** 2 + sigma ** 2;
+        const E = L * Math.pow(m, N);
+        const secondMoment = L ** 2 * Math.pow(A, N);
+        let V = secondMoment - E ** 2;
+        if (V < 0) V = 0;
+        const sigma_w2 = Math.log(1 + V / (E ** 2));
+        const logSigma = Math.sqrt(sigma_w2);
+        const logMu = Math.log(E) - 0.5 * sigma_w2;
+        return { logMu, logSigma };
+    };
+
     for (let year = 1; year <= projectionYears; year++) {
         let projectionValue, worstValue, topValue, totalReturn;
 
+        // Lump sum only applied in year 1
+        const lumpSumThisYear = year === 1 ? lumpSumInvestment : 0;
+
         if (year === 1) {
-            // Year 1: Initial investment, no returns yet
-            projectionValue = investment;
-            worstValue = investment;
-            topValue = investment;
+            // Year 1: Apply lump sum plus first annual contribution, no returns yet
+            projectionValue = lumpSumThisYear + investment;
+            worstValue = projectionValue;
+            topValue = projectionValue;
             totalReturn = 0;
         } else {
-            // Subsequent years: Apply returns to previous year's projection
+            // Subsequent years: Apply returns to previous year's projection and add annual contribution
             const prevYearProjection = results[year - 2].projection;
             projectionValue = prevYearProjection * (1 + expectedReturn) + investment;
         }
 
-        cumulativeInvestment += investment;
+        // Track cumulative contributions separately
+        cumulativeAnnualInvestment += investment;
+        cumulativeLumpSumInvestment += lumpSumThisYear;
 
-        const { logMu, logSigma } = getLognormalDistributionParams(investment, year, expectedReturn, volatility);
-        const topZ = jStat.normal.inv((100 - percentile) / 100, 0, 1)
-        const worstZ = jStat.normal.inv(percentile / 100, 0, 1)
-        topValue = Math.exp(logMu + topZ * logSigma);
-        worstValue = Math.exp(logMu + worstZ * logSigma);
-        totalReturn = projectionValue - cumulativeInvestment;
+        const totalContributed = cumulativeAnnualInvestment + cumulativeLumpSumInvestment;
+
+        // Bands via shared-Z evaluation combining annuity and lump sum
+        // 1) Params
+        const { logMu: annLogMu, logSigma: annLogSigma } = getLognormalDistributionParams(investment, year, expectedReturn, volatility);
+        const lumpYears = Math.max(0, year - 1);
+        const { logMu: lumpLogMu, logSigma: lumpLogSigma } = getLumpSumDistributionParams(lumpSumInvestment, lumpYears, expectedReturn, volatility);
+
+        // 2) Percentiles to evaluate: honor the UI knob for tails, also include middle bands
+        const pLo = Math.max(0.0001, percentile / 100);
+        const pHi = Math.min(0.9999, 1 - pLo);
+        const bandsP = [pLo, 0.25, 0.5, 0.75, pHi];
+        const q = totalQuantilesForYear(annLogMu, annLogSigma, lumpLogMu, lumpLogSigma, bandsP);
+
+        // 3) Derive worst/best/median
+        const median = q[0.5];
+        const worst = q[Math.min(...bandsP)];
+        const best = q[Math.max(...bandsP)];
+        topValue = best;
+        worstValue = worst;
+        totalReturn = projectionValue - totalContributed;
 
         results.push({
             year: year,
             age: age + year - 1,
             investment: investment,
-            totalInvestment: cumulativeInvestment,
+            lumpSum: lumpSumThisYear,
+            totalAnnualInvestment: cumulativeAnnualInvestment,
+            totalLumpSumInvestment: cumulativeLumpSumInvestment,
+            totalInvestment: totalContributed,
             projection: projectionValue,
             worstCase: worstValue < 0 ? 0 : worstValue,
             bestCase: topValue,
-            investmentReturn: totalReturn
+            investmentReturn: totalReturn,
+            medianCase: median,
         });
     }
 
@@ -225,6 +292,7 @@ const App: React.FC = () => {
     const [age, setAge] = useState(35);
     const [projectionYears, setProjectionYears] = useState(25);
     const [percentile, setPercentile] = useState(10); // e.g., 10 for 10th/90th percentile
+    const [lumpSumInvestment, setLumpSumInvestment] = useState<number>(1_000_000);
 
     // --- DERIVED PORTFOLIO METRICS --- //
     const { investment, expectedReturn, volatility } = useMemo(() => calculatePortfolioMetrics(positions), [positions]);
@@ -239,11 +307,12 @@ const App: React.FC = () => {
             expectedReturn,
             volatility,
             percentile,
+            lumpSumInvestment,
         });
-    }, [investment, age, projectionYears, expectedReturn, volatility, percentile]);
+    }, [investment, age, projectionYears, expectedReturn, volatility, percentile, lumpSumInvestment]);
 
     // --- UI RENDERING --- //
-    const currencyFormatter = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'THB', minimumFractionDigits: 0 }).format(value);
+    const currencyFormatter = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'THB', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
     const compactNumberFormatter = (value: number) => {
         if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
         if (value >= 1e3) return `${(value / 1e3).toFixed(0)}K`;
@@ -279,6 +348,8 @@ const App: React.FC = () => {
                         investment={investment}
                         expectedReturn={expectedReturn}
                         volatility={volatility}
+                        lumpSumInvestment={lumpSumInvestment}
+                        setLumpSumInvestment={setLumpSumInvestment}
                     />
                 </div>
             </div>

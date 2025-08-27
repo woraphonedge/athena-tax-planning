@@ -35,11 +35,19 @@ const ProjectionChart: React.FC<ProjectionChartProps> = ({ projectionData, curre
                 <YAxis tickFormatter={compactNumberFormatter} label={{ value: 'THB', angle: -90, position: 'insideLeft' }} />
                 <Tooltip formatter={(value: number) => currencyFormatter(value)} labelFormatter={(label) => `${xAxisKey === 'year' ? 'Year' : 'Age'}: ${label}`} />
                 <Legend />
-                <Area type="monotone" dataKey="projection" fill="#db2777" stroke="#db2777" name="Projected Value" fillOpacity={0.8} />
-                <Area type="monotone" dataKey="totalInvestment" fill="#6366f1" stroke="#6366f1" name="Total Investment" fillOpacity={0.8} />
+                {/* Projected portfolio value */}
+                <Area type="monotone" dataKey="projection" fill="#db2777" stroke="#db2777" name="Projected Value" fillOpacity={0.6} />
+                
+                {/* Stacked contribution areas: annual vs lump sum */}
+                <Area type="monotone" dataKey="totalLumpSumInvestment" stackId="contrib" fill="#a78bfa" stroke="#a78bfa" name="Lump Sum (Cumulative)" fillOpacity={1.0} />
+                <Area type="monotone" dataKey="totalAnnualInvestment" stackId="contrib" fill="#6366f1" stroke="#6366f1" name="Annual Contributions (Cumulative)" fillOpacity={1.0} />
+
+                {/* fanchart*/}
                 <Line type="monotone" dataKey="bestCase" stroke="#34d399" strokeWidth={2} dot={false} strokeDasharray="4 4" name="Best Case" />
                 <Line type="monotone" dataKey="worstCase" stroke="#f87171" strokeWidth={2} dot={false} strokeDasharray="4 4" name="Worst Case" />
-                <Bar dataKey="investment" barSize={20} fill="#34d399" name="Investment" />
+
+                <Bar dataKey="lumpSum" stackId="bar" barSize={20} fill="#10b981" name="Lump Sum (Year 1)" />
+                <Bar dataKey="investment" stackId="bar" barSize={20} fill="#34d399" name="Annual Investment" />
             </ComposedChart>
         </div>
     );

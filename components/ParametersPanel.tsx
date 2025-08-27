@@ -24,6 +24,8 @@ interface ParametersPanelProps {
     investment: number;
     expectedReturn: number;
     volatility: number;
+    lumpSumInvestment: number;
+    setLumpSumInvestment: (v: number) => void;
 }
 
 // --- REUSABLE PARAMETER COMPONENT --- //
@@ -66,7 +68,7 @@ const ParametersPanel: React.FC<ParametersPanelProps> = (props) => {
             <CardContent className="space-y-4">
                 <div>
                     <h3 className="text-md font-semibold mb-2">Portfolio Metrics</h3>
-                    <div className="space-y-2">
+                    <div className="space-y-2">    
                         <MetricDisplay label="Total Annual Investment" value={currencyFormatter(props.investment)} />
                         <MetricDisplay label="Weighted Expected Return" value={formatPercent(props.expectedReturn)} />
                         <MetricDisplay label="Portfolio Volatility" value={formatPercent(props.volatility)} />
@@ -75,6 +77,7 @@ const ParametersPanel: React.FC<ParametersPanelProps> = (props) => {
                 <div>
                     <h3 className="text-md font-semibold mb-2">Projection Settings</h3>
                      <div className="space-y-2">
+                        <Parameter label="Lump sum Investment" value={props.lumpSumInvestment} setValue={props.setLumpSumInvestment} min={0} max={10000000} step={100000} />    
                         <Parameter label="Current Age" value={props.age} setValue={props.setAge} min={18} max={70} step={1} />
                         <Parameter label="Projection Years" value={props.projectionYears} setValue={props.setProjectionYears} min={5} max={50} step={1} />
                         <Parameter label="Best/Worst Case Percentile (%)" value={props.percentile} setValue={props.setPercentile} min={1} max={25} step={1} />

@@ -1,4 +1,13 @@
 import React from 'react';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface ProjectionTableProps {
     projectionData: any[];
@@ -6,41 +15,39 @@ interface ProjectionTableProps {
 }
 
 const ProjectionTable: React.FC<ProjectionTableProps> = ({ projectionData, currencyFormatter }) => (
-    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-        <h3 className="text-xl font-semibold text-slate-900 p-6">Projection Details</h3>
-        <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left text-slate-500">
-                <thead className="text-xs text-slate-700 uppercase bg-slate-100">
-                    <tr>
-                        <th scope="col" className="px-6 py-3">Year</th>
-                        <th scope="col" className="px-6 py-3">Age</th>
-                        <th scope="col" className="px-6 py-3">Total Investment</th>
-                        <th scope="col" className="px-6 py-3">Worst 10%</th>
-                        <th scope="col" className="px-6 py-3">Projection with Tax Saved</th>
-                        <th scope="col" className="px-6 py-3">Top 10%</th>
-                        <th scope="col" className="px-6 py-3">Tax Saved</th>
-                        <th scope="col" className="px-6 py-3">Cumulative Tax Saved</th>
-                        <th scope="col" className="px-6 py-3">Total Return</th>
-                    </tr>
-                </thead>
-                <tbody>
+    <Card>
+        <CardHeader className="py-2">
+            <CardTitle className="text-sm">Projection Details</CardTitle>
+        </CardHeader>
+        <CardContent className="p-2">
+            <Table className="text-xs">
+                <TableHeader>
+                    <TableRow className="h-5">
+                        <TableHead className="px-2 py-1 text-right">Year</TableHead>
+                        <TableHead className="px-2 py-1 text-right">Age</TableHead>
+                        <TableHead className="px-2 py-1 text-right">Total Investment</TableHead>
+                        <TableHead className="px-2 py-1 text-right">Worst 10%</TableHead>
+                        <TableHead className="px-2 py-1 text-right">Projection</TableHead>
+                        <TableHead className="px-2 py-1 text-right">Top 10%</TableHead>
+                        <TableHead className="px-2 py-1 text-right">Total Return</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
                     {projectionData.map((d: any) => (
-                        <tr key={d.year + '-' + d.age} className="bg-white border-b hover:bg-slate-50">
-                            <td className="px-6 py-4 font-medium text-slate-900">{d.year}</td>
-                            <td className="px-6 py-4">{d.age}</td>
-                            <td className="px-6 py-4">{currencyFormatter(d.totalInvestment)}</td>
-                            <td className="px-6 py-4 text-red-600">{currencyFormatter(d.worstCase)}</td>
-                            <td className="px-6 py-4 font-bold text-slate-800">{currencyFormatter(d.projection)}</td>
-                            <td className="px-6 py-4 text-green-600">{currencyFormatter(d.bestCase)}</td>
-                            <td className="px-6 py-4">{currencyFormatter(d.taxSaved)}</td>
-                            <td className="px-6 py-4">{currencyFormatter(d.cumulativeTaxSaved)}</td>
-                            <td className="px-6 py-4">{currencyFormatter(d.investmentReturn)}</td>
-                        </tr>
+                        <TableRow key={d.year + '-' + d.age} className="h-5 even:bg-gray-200 dark:even:bg-gray-800/30">
+                            <TableCell className="font-medium px-2 py-1 text-right">{d.year}</TableCell>
+                            <TableCell className="px-2 py-1 text-right">{d.age}</TableCell>
+                            <TableCell className="px-2 py-1 font-mono tabular-nums text-right">{currencyFormatter(d.totalInvestment)}</TableCell>
+                            <TableCell className="text-red-600 px-2 py-1 font-mono tabular-nums text-right">{currencyFormatter(d.worstCase)}</TableCell>
+                            <TableCell className="font-bold px-2 py-1 font-mono tabular-nums text-right">{currencyFormatter(d.projection)}</TableCell>
+                            <TableCell className="text-green-600 px-2 py-1 font-mono tabular-nums text-right">{currencyFormatter(d.bestCase)}</TableCell>
+                            <TableCell className="px-2 py-1 font-mono tabular-nums text-right">{currencyFormatter(d.investmentReturn)}</TableCell>
+                        </TableRow>
                     ))}
-                </tbody>
-            </table>
-        </div>
-    </div>
+                </TableBody>
+            </Table>
+        </CardContent>
+    </Card>
 );
 
 export default ProjectionTable;
